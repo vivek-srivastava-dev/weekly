@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Route } from "./+types/events";
 import { useNavigate } from "react-router";
 import { apiFetch } from "../lib/api";
@@ -27,7 +27,7 @@ type RegisterResponse = {
 export function meta({}: Route.MetaArgs) {
   return [
     { title: "Weekly - Events" },
-    { name: "description", content: "Upcoming weekend events." },
+    { name: "description", content: "Upcoming events." },
   ];
 }
 
@@ -108,11 +108,13 @@ export default function Events() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState<string | null>(null);
   const [name, setName] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const navigate = useNavigate();
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -151,6 +153,19 @@ export default function Events() {
     loadEvents();
   }, [navigate, token, hydrated]);
 
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpen]);
+
   const handleRegister = async (eventId: string) => {
     if (!token) {
       navigate("/");
@@ -181,10 +196,7 @@ export default function Events() {
   return (
     <main className="min-h-screen px-6 py-10">
       <div className="mx-auto max-w-6xl space-y-6">
-        <header className="flex flex-col gap-4 rounded-3xl bg-white/80 p-6 shadow-lg backdrop-blur">
-          <p className="text-sm text-gray-500">
-            {name ? `${name} (${phoneNumber})` : phoneNumber}
-          </p>
+        <header className="relative z-50 flex flex-col gap-4 rounded-3xl bg-white/80 p-6 shadow-lg backdrop-blur">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-xs uppercase tracking-[0.4em] text-gray-400">
@@ -194,17 +206,53 @@ export default function Events() {
                 Upcoming weekend events
               </h1>
             </div>
-            <button
-              onClick={() => {
-                localStorage.removeItem("weekly_token");
-                localStorage.removeItem("weekly_phone");
-                localStorage.removeItem("weekly_name");
-                navigate("/");
-              }}
-              className="rounded-full border border-gray-200 px-4 py-2 text-sm text-gray-500 transition hover:border-gray-300 hover:text-gray-700"
-            >
-              Log out
-            </button>
+            <div className="relative" ref={menuRef}>
+              <button
+                type="button"
+                onClick={() => setMenuOpen((prev) => !prev)}
+                className="flex items-center gap-3 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600 shadow-sm transition hover:border-gray-300 hover:text-gray-800"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                  {(name || phoneNumber || "U").slice(0, 1).toUpperCase()}
+                </span>
+                <span className="hidden text-left sm:block">
+                  <span className="block text-sm font-semibold text-gray-900">
+                    {name || "Guest"}
+                  </span>
+                  <span className="block text-xs text-gray-500">
+                    {phoneNumber}
+                  </span>
+                </span>
+                <span className="text-gray-400">▾</span>
+              </button>
+
+              {menuOpen ? (
+                <div className="absolute right-0 mt-3 w-64 rounded-2xl border border-gray-100 bg-white p-4 shadow-xl z-50">
+                  <p className="text-xs uppercase tracking-[0.3em] text-gray-400">
+                    Profile
+                  </p>
+                  <p className="mt-3 text-sm font-semibold text-gray-900">
+                    {name || "Guest"}
+                  </p>
+                  <p className="mt-1 text-xs text-gray-500">{phoneNumber}</p>
+                  <div className="mt-4 border-t border-gray-100 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        console.log("logging out");
+                        localStorage.removeItem("weekly_token");
+                        localStorage.removeItem("weekly_phone");
+                        localStorage.removeItem("weekly_name");
+                        navigate("/");
+                      }}
+                      className="w-full rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:-translate-y-0.5"
+                    >
+                      Log out
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         </header>
 
@@ -232,7 +280,7 @@ export default function Events() {
             {events.map((event) => (
               <article
                 key={event._id}
-                className="overflow-hidden rounded-2xl bg-white shadow-lg transition hover:-translate-y-1 hover:shadow-xl flex flex-col gap-3"
+                className="relative z-0 overflow-hidden rounded-2xl bg-white shadow-lg transition hover:-translate-y-1 hover:shadow-xl flex flex-col gap-3"
               >
                 {event.images?.[0] ? (
                   <EventCollage
