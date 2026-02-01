@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+:root {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+html,
+body {
+  font-family: var(--font-sans);
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: -20% -10% auto -10%;
+  height: 60%;
+  background: radial-gradient(
+    circle at 20% 20%,
+    rgba(56, 189, 248, 0.25),
+    transparent 45%
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
