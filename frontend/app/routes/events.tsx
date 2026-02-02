@@ -40,44 +40,9 @@ function EventCollage({
   title: string;
   location: string;
 }) {
-  const [index, setIndex] = useState(0);
-  const [animate, setAnimate] = useState(true);
-
-  useEffect(() => {
-    if (!images?.length) {
-      return;
-    }
-    const interval = setInterval(() => {
-      setIndex((prev) => {
-        if (prev >= images.length - 1) {
-          setAnimate(false);
-          return 0;
-        }
-        setAnimate(true);
-        return prev + 1;
-      });
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [images]);
-
-  useEffect(() => {
-    if (!animate) {
-      const id = requestAnimationFrame(() => setAnimate(true));
-      return () => cancelAnimationFrame(id);
-    }
-    return undefined;
-  }, [animate]);
-
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-slate-100">
-      <div
-        className="flex"
-        style={{
-          transform: `translateX(-${index * 100}%)`,
-          transition: animate ? "transform 1s ease" : "none",
-        }}
-      >
+    <div className="relative overflow-hidden">
+      <div className="flex">
         {images.map((image, idx) => (
           <img
             key={`${title}-collage-${idx}`}
@@ -97,10 +62,13 @@ function EventCollage({
 function formatDateRange(start: string, end: string) {
   const startDate = new Date(start);
   const endDate = new Date(end);
-  return `${startDate.toLocaleDateString()} · ${startDate.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  })} - ${endDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  return `${startDate.toLocaleDateString()} · ${startDate.toLocaleTimeString(
+    [],
+    {
+      hour: "2-digit",
+      minute: "2-digit",
+    }
+  )} - ${endDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 export default function Events() {
@@ -112,6 +80,7 @@ export default function Events() {
   const [token, setToken] = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState<string | null>(null);
   const [name, setName] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const navigate = useNavigate();
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -123,6 +92,7 @@ export default function Events() {
     setToken(localStorage.getItem("weekly_token"));
     setPhoneNumber(localStorage.getItem("weekly_phone"));
     setName(localStorage.getItem("weekly_name"));
+    setEmail(localStorage.getItem("weekly_email"));
     setHydrated(true);
   }, []);
 
@@ -203,7 +173,7 @@ export default function Events() {
                 Weekly picks
               </p>
               <h1 className="mt-2 text-3xl font-semibold text-gray-900">
-                Upcoming weekend events
+                Upcoming Events
               </h1>
             </div>
             <div className="relative" ref={menuRef}>
@@ -213,15 +183,17 @@ export default function Events() {
                 className="flex items-center gap-3 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600 shadow-sm transition hover:border-gray-300 hover:text-gray-800"
               >
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
-                  {(name || phoneNumber || "U").slice(0, 1).toUpperCase()}
+                  {(name || phoneNumber || email || "U")
+                    .slice(0, 1)
+                    .toUpperCase()}
                 </span>
                 <span className="hidden text-left sm:block">
                   <span className="block text-sm font-semibold text-gray-900">
                     {name || "Guest"}
                   </span>
-                  <span className="block text-xs text-gray-500">
-                    {phoneNumber}
-                  </span>
+                <span className="block text-xs text-gray-500">
+                  {phoneNumber || email}
+                </span>
                 </span>
                 <span className="text-gray-400">▾</span>
               </button>
@@ -234,7 +206,9 @@ export default function Events() {
                   <p className="mt-3 text-sm font-semibold text-gray-900">
                     {name || "Guest"}
                   </p>
-                  <p className="mt-1 text-xs text-gray-500">{phoneNumber}</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {phoneNumber || email}
+                  </p>
                   <div className="mt-4 border-t border-gray-100 pt-3">
                     <button
                       type="button"
@@ -243,6 +217,7 @@ export default function Events() {
                         localStorage.removeItem("weekly_token");
                         localStorage.removeItem("weekly_phone");
                         localStorage.removeItem("weekly_name");
+                        localStorage.removeItem("weekly_email");
                         navigate("/");
                       }}
                       className="w-full rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:-translate-y-0.5"
@@ -302,7 +277,8 @@ export default function Events() {
                   <div className="flex items-center justify-between">
                     <div className="text-xs text-gray-500">
                       <p>
-                        Registered: {event.registrationsCount} / {event.capacity}
+                        Registered: {event.registrationsCount} /{" "}
+                        {event.capacity}
                       </p>
                       <div className="mt-2 h-2 w-28 overflow-hidden rounded-full bg-gray-100">
                         <div

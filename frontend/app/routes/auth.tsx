@@ -3,14 +3,9 @@ import type { Route } from "./+types/auth";
 import { useNavigate } from "react-router";
 import { apiFetch } from "../lib/api";
 
-type RequestOtpResponse = {
-  success: boolean;
-  expiresInMinutes: number;
-};
-
 type VerifyOtpResponse = {
   token: string;
-  user: { id: string; phoneNumber: string; name?: string };
+  user: { id: string; email?: string; phoneNumber?: string; name?: string };
 };
 
 export function meta({}: Route.MetaArgs) {
@@ -24,7 +19,7 @@ export default function Auth() {
   const [name, setName] = useState("");
   const [countryCode, setCountryCode] = useState("+91");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [channel, setChannel] = useState<"sms" | "whatsapp" | "both">("sms");
+  const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<"request" | "verify">("request");
   const [loading, setLoading] = useState(false);
@@ -32,7 +27,7 @@ export default function Auth() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const fullPhoneNumber = `${countryCode} ${phoneNumber}`.trim();
+  const fullPhoneNumber = `${countryCode}${phoneNumber}`.trim();
 
   const handleRequestOtp = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -41,12 +36,12 @@ export default function Auth() {
     setMessage(null);
 
     try {
-      const data = await apiFetch<RequestOtpResponse>("/auth/request-otp", {
+      await apiFetch("/auth/request-email-otp", {
         method: "POST",
-        body: { phoneNumber: fullPhoneNumber, channel, name },
+        body: { email },
       });
       setStep("verify");
-      setMessage(`OTP sent. Expires in ${data.expiresInMinutes} minutes.`);
+      setMessage("OTP sent. Please check your email.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send OTP.");
     } finally {
@@ -61,12 +56,17 @@ export default function Auth() {
     setMessage(null);
 
     try {
-      const data = await apiFetch<VerifyOtpResponse>("/auth/verify-otp", {
+      const data = await apiFetch<VerifyOtpResponse>("/auth/verify-email-otp", {
         method: "POST",
-        body: { phoneNumber: fullPhoneNumber, code: otp, name },
+        body: { email, code: otp, name, phoneNumber: fullPhoneNumber },
       });
       localStorage.setItem("weekly_token", data.token);
-      localStorage.setItem("weekly_phone", data.user.phoneNumber);
+      if (data.user.email) {
+        localStorage.setItem("weekly_email", data.user.email);
+      }
+      if (data.user.phoneNumber) {
+        localStorage.setItem("weekly_phone", data.user.phoneNumber);
+      }
       if (data.user.name) {
         localStorage.setItem("weekly_name", data.user.name);
       }
@@ -112,7 +112,7 @@ export default function Auth() {
         <section className="rounded-3xl bg-white p-8 shadow-xl">
           <h2 className="text-2xl font-semibold text-gray-900">Get started</h2>
           <p className="mt-2 text-sm text-gray-600">
-            Sign in with your mobile number to view upcoming weekend events.
+            Verify your email to view upcoming events.
           </p>
 
           <form
@@ -127,6 +127,19 @@ export default function Auth() {
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="Jon Snow"
+              className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-900 focus:outline-none"
+              required
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700">
+              Email address
+            </label>
+            <input
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+              type="email"
               className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-900 focus:outline-none"
               required
             />
@@ -160,24 +173,7 @@ export default function Auth() {
             </div>
           </div>
 
-          {step === "request" ? (
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                Send OTP via
-              </label>
-              <select
-                value={channel}
-                onChange={(event) =>
-                  setChannel(event.target.value as "sms" | "whatsapp" | "both")
-                }
-                className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-900 focus:outline-none"
-              >
-                <option value="sms">SMS</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="both">SMS + WhatsApp</option>
-              </select>
-            </div>
-          ) : (
+          {step === "verify" ? (
             <div>
               <label className="text-sm font-medium text-gray-700">OTP</label>
               <input
@@ -188,7 +184,7 @@ export default function Auth() {
                 required
               />
             </div>
-          )}
+          ) : null}
 
           {message ? (
             <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
@@ -222,7 +218,7 @@ export default function Auth() {
                 }}
                 className="w-full text-sm text-gray-500 hover:text-gray-700"
               >
-                Change phone number
+                Send a new code
               </button>
             ) : null}
           </form>

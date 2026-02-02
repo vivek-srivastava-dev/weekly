@@ -1,77 +1,109 @@
 import { Router } from "express";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
-import { Otp } from "../models/Otp.js";
+import { EmailOtp } from "../models/EmailOtp.js";
 import { User } from "../models/User.js";
 import { generateOtp } from "../utils/otp.js";
-import { sendOtp } from "../utils/sendOtp.js";
+import { sendEmailOtp } from "../utils/sendEmailOtp.js";
 
 const router = Router();
 
-router.post("/request-otp", async (req, res) => {
-  const { phoneNumber, channel = "sms" } = req.body;
+router.post("/request-email-otp", async (req, res) => {
+  const { email } = req.body;
 
-  if (!phoneNumber || typeof phoneNumber !== "string") {
-    return res.status(400).json({ message: "Valid phone number is required." });
+  if (!email || typeof email !== "string") {
+    return res.status(400).json({ message: "Valid email is required." });
   }
 
-  if (!["sms", "whatsapp", "both"].includes(channel)) {
-    return res.status(400).json({ message: "Invalid delivery channel." });
-  }
-
+  const normalizedEmail = email.trim().toLowerCase();
   const code = generateOtp();
   const expiresAt = new Date(Date.now() + env.OTP_TTL_MINUTES * 60 * 1000);
 
-  await Otp.deleteMany({ phoneNumber });
-  await Otp.create({ phoneNumber, code, expiresAt, channel });
+  await EmailOtp.deleteMany({ email: normalizedEmail });
+  await EmailOtp.create({ email: normalizedEmail, code, expiresAt });
 
-  await sendOtp({ phoneNumber, code, channel });
+  await sendEmailOtp({ email: normalizedEmail, code });
 
   return res.json({ success: true, expiresInMinutes: env.OTP_TTL_MINUTES });
 });
 
-router.post("/verify-otp", async (req, res) => {
-  const { phoneNumber, code, name } = req.body;
+router.post("/verify-email-otp", async (req, res) => {
+  const { email, code, name, phoneNumber } = req.body;
 
-  if (!phoneNumber || typeof phoneNumber !== "string") {
-    return res.status(400).json({ message: "Valid phone number is required." });
+  if (!email || typeof email !== "string") {
+    return res.status(400).json({ message: "Valid email is required." });
   }
 
   if (!code || typeof code !== "string") {
     return res.status(400).json({ message: "OTP code is required." });
   }
 
-  const otp = await Otp.findOne({ phoneNumber, code });
+  const normalizedEmail = email.trim().toLowerCase();
+  const otp = await EmailOtp.findOne({ email: normalizedEmail, code });
   if (!otp || otp.expiresAt < new Date()) {
     return res.status(400).json({ message: "Invalid or expired OTP." });
   }
 
-  let user = await User.findOne({ phoneNumber });
+  const normalizedPhone =
+    typeof phoneNumber === "string" && phoneNumber.trim()
+      ? phoneNumber.trim()
+      : undefined;
+
+  let user = await User.findOne({ email: normalizedEmail });
   if (!user) {
-    user = await User.create({
-      phoneNumber,
-      name: typeof name === "string" ? name.trim() : "",
-      verifiedAt: new Date(),
-    });
+    try {
+      user = await User.create({
+        email: normalizedEmail,
+        phoneNumber: normalizedPhone,
+        name: typeof name === "string" ? name.trim() : "",
+        verifiedAt: new Date(),
+      });
+    } catch (error) {
+      if (error?.code === 11000) {
+        return res.status(409).json({
+          message:
+            "This phone number is already linked to another user. Please use a different number.",
+        });
+      }
+      throw error;
+    }
   } else {
     user.verifiedAt = new Date();
     if (typeof name === "string" && name.trim()) {
       user.name = name.trim();
     }
-    await user.save();
+    if (normalizedPhone) {
+      user.phoneNumber = normalizedPhone;
+    }
+    try {
+      await user.save();
+    } catch (error) {
+      if (error?.code === 11000) {
+        return res.status(409).json({
+          message:
+            "This phone number is already linked to another user. Please use a different number.",
+        });
+      }
+      throw error;
+    }
   }
 
-  await Otp.deleteMany({ phoneNumber });
+  await EmailOtp.deleteMany({ email: normalizedEmail });
 
   const token = jwt.sign(
-    { sub: user.id, phoneNumber: user.phoneNumber },
+    { sub: user.id, email: user.email, phoneNumber: user.phoneNumber },
     env.JWT_SECRET,
     { expiresIn: "7d" }
   );
 
   return res.json({
     token,
-    user: { id: user.id, phoneNumber: user.phoneNumber, name: user.name },
+    user: {
+      id: user.id,
+      email: user.email,
+      phoneNumber: user.phoneNumber,
+      name: user.name,
+    },
   });
 });
 
